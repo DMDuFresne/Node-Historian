@@ -1,5 +1,7 @@
 # Node Historian
 
+# ![Node Historian](docs/NodeHistorian.png)
+
 ## Overview
 This stack serves as a simple solution for data monitoring, history, and analytics. It integrates the following technologies to create a demo that shows the value of **Connecting, Collecting, and Storing** your IoT data. This is intended as a starting point for discussion and education, not as a definitive or scalable solution.
 
