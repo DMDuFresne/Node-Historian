@@ -1,0 +1,2467 @@
+[
+    {
+        "id": "82239651bf22954b",
+        "type": "tab",
+        "label": "Publish MQTT",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "50f4aa8cf7b0f772",
+        "type": "tab",
+        "label": "REST API",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "8440233422424740",
+        "type": "tab",
+        "label": "GraphQL",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "3e4a16526df2e944",
+        "type": "tab",
+        "label": "Health Check",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "ace83715043d11b0",
+        "type": "tab",
+        "label": "Tests",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "aa5bd3db65f96762",
+        "type": "subflow",
+        "name": "Publish MQTT",
+        "info": "",
+        "category": "",
+        "in": [
+            {
+                "x": 40,
+                "y": 40,
+                "wires": [
+                    {
+                        "id": "33791ae1bc7b0410"
+                    }
+                ]
+            }
+        ],
+        "out": [],
+        "env": [
+            {
+                "name": "Recursive",
+                "type": "bool",
+                "value": "false"
+            }
+        ],
+        "meta": {},
+        "color": "#DDAA99",
+        "status": {
+            "x": 120,
+            "y": 560,
+            "wires": [
+                {
+                    "id": "ea0494fc8220da5a",
+                    "port": 0
+                }
+            ]
+        }
+    },
+    {
+        "id": "20ae1e52d1eef983",
+        "type": "postgreSQLConfig",
+        "name": "Local Historian",
+        "host": "Node-Historian",
+        "hostFieldType": "str",
+        "port": "5432",
+        "portFieldType": "num",
+        "database": "TIMESCALE_DATABASE_NAME",
+        "databaseFieldType": "env",
+        "ssl": "false",
+        "sslFieldType": "bool",
+        "applicationName": "Node-Red",
+        "applicationNameType": "str",
+        "max": "10",
+        "maxFieldType": "num",
+        "idle": "5000",
+        "idleFieldType": "num",
+        "connectionTimeout": "10000",
+        "connectionTimeoutFieldType": "num",
+        "user": "TIMESCALE_USERNAME",
+        "userFieldType": "env",
+        "password": "TIMESCALE_PASSWORD",
+        "passwordFieldType": "env"
+    },
+    {
+        "id": "5015a852569eb71b",
+        "type": "mqtt-broker",
+        "name": "Local Broker",
+        "broker": "Node-Broker",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "69922c21e7b0e9a5",
+        "type": "graphql-schema",
+        "name": "Topic",
+        "schema": "scalar JSON\nscalar DateTime\n\ntype Query {\n  metrics(\n    topic: String, \n    datatype: String,\n    start: DateTime!,\n    end: DateTime!\n    max: Int)\n    : [Metric]\n}\n\ntype Mutation {\n  addMetric(\n    topic: String!, \n    data: JSON!, \n    recursive: Boolean)\n    : Metric\n}\n\ntype Metric {\n  timestamp: DateTime\n  datatype: String\n  topic: String\n  data: JSON\n}\n",
+        "pagination": false,
+        "cursorField": ""
+    },
+    {
+        "id": "eaa2bedaa350fcb3",
+        "type": "mqtt out",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish",
+        "topic": "",
+        "qos": "0",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "5015a852569eb71b",
+        "x": 700,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "1687d621355052f1",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Payload Recursion",
+        "func": "function publishKeyValuePairs(obj, currentTopic) {\n    // Publish the entire object/array at the current level\n    let baseMessage = {\n        payload: obj,\n        topic: currentTopic\n    };\n    node.send(baseMessage);\n\n    // Iterate through the properties of the object\n    for (let key in obj) {\n        if (obj.hasOwnProperty(key)) {\n            let newTopic = currentTopic + \"/\" + key;\n            if (typeof obj[key] === 'object' && obj[key] !== null) {\n                if (Array.isArray(obj[key])) {\n                    // Publish the entire array before drilling down\n                    let arrayMessage = {\n                        payload: obj[key],\n                        topic: newTopic\n                    };\n                    node.send(arrayMessage);\n\n                    // Iterate through the elements of the array\n                    obj[key].forEach((item, index) => {\n                        if (typeof item === 'object' && item !== null) {\n                            // If an element of the array is an object, recurse\n                            publishKeyValuePairs(item, newTopic + \"/\" + index);\n                        } else {\n                            // If an element of the array is a primitive, send it\n                            let message = {\n                                payload: item,\n                                topic: newTopic + \"/\" + index\n                            };\n                            node.send(message);\n                        }\n                    });\n                } else {\n                    // If the value is a non-array object, recurse\n                    publishKeyValuePairs(obj[key], newTopic);\n                }\n            } else {\n                // If the value is a primitive, send it\n                let message = {\n                    payload: obj[key],\n                    topic: newTopic\n                };\n                node.send(message);\n            }\n        }\n    }\n}\n\nlet payload = msg.payload;\nlet topic = msg.topic;\n\npublishKeyValuePairs(payload, topic);\n\nmsg.topic = topic;\nmsg.payload = payload;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 360,
+        "wires": [
+            [
+                "1f37ecdb43c414f7"
+            ]
+        ]
+    },
+    {
+        "id": "5b7955854a6bd9d6",
+        "type": "switch",
+        "z": "aa5bd3db65f96762",
+        "name": "Topic is String",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "istype",
+                "v": "string",
+                "vt": "string"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 180,
+        "y": 160,
+        "wires": [
+            [
+                "4985147f23192c9c"
+            ],
+            [
+                "0e79e491fd9f15c4"
+            ]
+        ]
+    },
+    {
+        "id": "4985147f23192c9c",
+        "type": "switch",
+        "z": "aa5bd3db65f96762",
+        "name": "Topic String is Not Empty",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "nempty"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 470,
+        "y": 160,
+        "wires": [
+            [
+                "80e5383ac458dd1c"
+            ],
+            [
+                "26e5e28dc312df19"
+            ]
+        ]
+    },
+    {
+        "id": "0e79e491fd9f15c4",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Bad Topic Type",
+        "func": "let text = \"The Topic is not a String\"\n\nmsg.payload = { fill: \"red\", shape: \"dot\", text: text};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 180,
+        "y": 220,
+        "wires": [
+            [
+                "d2287cf1b6842e5b"
+            ]
+        ]
+    },
+    {
+        "id": "80e5383ac458dd1c",
+        "type": "switch",
+        "z": "aa5bd3db65f96762",
+        "name": "The Payload is Not Null",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "nnull"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 790,
+        "y": 160,
+        "wires": [
+            [
+                "fd0eb47d80bad9a5"
+            ],
+            [
+                "3e631c2c18d7ca18"
+            ]
+        ]
+    },
+    {
+        "id": "26e5e28dc312df19",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Bad Topic Type",
+        "func": "let text = \"The Topic String is Empty\"\n\nmsg.payload = { fill: \"red\", shape: \"dot\", text: text};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 440,
+        "y": 220,
+        "wires": [
+            [
+                "5828376d7e275f52"
+            ]
+        ]
+    },
+    {
+        "id": "12cb4635b44a9ec0",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Cleanse",
+        "func": "function removeEmptyFields(obj) {\n    if (Array.isArray(obj)) {\n        return obj\n            .map(v => (v && typeof v === 'object') ? removeEmptyFields(v) : v)\n            .filter(v => v !== '' && v != null && !(typeof v === 'object' && Object.keys(v).length === 0));\n    } else if (typeof obj === 'object') {\n        return Object.entries(obj)\n            .reduce((acc, [key, value]) => {\n                if (value === '' || value == null || (typeof value === 'object' && Object.keys(value).length === 0)) {\n                    return acc;\n                }\n                if (typeof value === 'object') {\n                    value = removeEmptyFields(value);\n                }\n                acc[key] = value;\n                return acc;\n            }, {});\n    }\n    return obj;\n}\n\nlet payload = msg.payload;\npayload = removeEmptyFields(payload);\n\nmsg.payload = payload;\n\nreturn msg",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 360,
+        "wires": [
+            [
+                "1687d621355052f1"
+            ]
+        ]
+    },
+    {
+        "id": "d2287cf1b6842e5b",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Status 1",
+        "mode": "link",
+        "links": [
+            "ea0494fc8220da5a"
+        ],
+        "x": 295,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "5828376d7e275f52",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Status 2",
+        "mode": "link",
+        "links": [
+            "ea0494fc8220da5a"
+        ],
+        "x": 555,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "ea0494fc8220da5a",
+        "type": "link in",
+        "z": "aa5bd3db65f96762",
+        "name": "Status In",
+        "links": [
+            "5828376d7e275f52",
+            "d2287cf1b6842e5b",
+            "eb85013d8a0321b9",
+            "2a819fca8c57ead2",
+            "7dffca6028e350fe"
+        ],
+        "x": 35,
+        "y": 560,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "3e631c2c18d7ca18",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Null Payload",
+        "func": "let text = \"The Payload is Null\"\n\nmsg.payload = { fill: \"red\", shape: \"dot\", text: text};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 750,
+        "y": 220,
+        "wires": [
+            [
+                "eb85013d8a0321b9"
+            ]
+        ]
+    },
+    {
+        "id": "eb85013d8a0321b9",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Status 3",
+        "mode": "link",
+        "links": [
+            "ea0494fc8220da5a"
+        ],
+        "x": 875,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "1539d826be6da19c",
+        "type": "link in",
+        "z": "aa5bd3db65f96762",
+        "name": "Validate Topic",
+        "links": [
+            "33791ae1bc7b0410"
+        ],
+        "x": 35,
+        "y": 160,
+        "wires": [
+            [
+                "5b7955854a6bd9d6"
+            ]
+        ]
+    },
+    {
+        "id": "33791ae1bc7b0410",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Validate Topic",
+        "mode": "link",
+        "links": [
+            "1539d826be6da19c"
+        ],
+        "x": 115,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "7c5ad3fd8429108e",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Valid Topic and Payload",
+        "func": "let text = msg.topic\n\nmsg.payload = { fill: \"green\", shape: \"dot\", text: text};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 480,
+        "wires": [
+            [
+                "7dffca6028e350fe"
+            ]
+        ]
+    },
+    {
+        "id": "7dffca6028e350fe",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Status 5",
+        "mode": "link",
+        "links": [
+            "ea0494fc8220da5a"
+        ],
+        "x": 745,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "ad8c6c5c7a19f670",
+        "type": "switch",
+        "z": "aa5bd3db65f96762",
+        "name": "Recursive Payload",
+        "property": "Recursive",
+        "propertyType": "env",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 190,
+        "y": 360,
+        "wires": [
+            [
+                "12cb4635b44a9ec0"
+            ],
+            [
+                "1b0aca21733824ee"
+            ]
+        ]
+    },
+    {
+        "id": "fd0eb47d80bad9a5",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish Topic",
+        "mode": "link",
+        "links": [
+            "f4048319e6fbfa9c"
+        ],
+        "x": 975,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "f4048319e6fbfa9c",
+        "type": "link in",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish Topic",
+        "links": [
+            "fd0eb47d80bad9a5"
+        ],
+        "x": 35,
+        "y": 360,
+        "wires": [
+            [
+                "ad8c6c5c7a19f670"
+            ]
+        ]
+    },
+    {
+        "id": "7292c6361f063b6f",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Validate Topic",
+        "info": "",
+        "x": 90,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "7f2295edbda6e8ef",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Validate Topic",
+        "info": "",
+        "x": 210,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "a869731b418441ec",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish Topic",
+        "info": "",
+        "x": 1070,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "01c9884e7750cdb5",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish Topic",
+        "info": "",
+        "x": 90,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "7f92b6a598dba318",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Return Status",
+        "info": "",
+        "x": 90,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "1b0aca21733824ee",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish",
+        "mode": "link",
+        "links": [
+            "a52d84ae6e1adf23"
+        ],
+        "x": 375,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "a52d84ae6e1adf23",
+        "type": "link in",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish",
+        "links": [
+            "1b0aca21733824ee",
+            "1f37ecdb43c414f7"
+        ],
+        "x": 535,
+        "y": 420,
+        "wires": [
+            [
+                "eaa2bedaa350fcb3",
+                "7c5ad3fd8429108e"
+            ]
+        ]
+    },
+    {
+        "id": "1f37ecdb43c414f7",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish",
+        "mode": "link",
+        "links": [
+            "a52d84ae6e1adf23"
+        ],
+        "x": 745,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "19dceaba0cb147bf",
+        "type": "mqtt in",
+        "z": "82239651bf22954b",
+        "name": "",
+        "topic": "#",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "5015a852569eb71b",
+        "nl": false,
+        "rap": true,
+        "rh": "0",
+        "inputs": 0,
+        "x": 70,
+        "y": 80,
+        "wires": [
+            [
+                "bd5569d3154382bd"
+            ]
+        ]
+    },
+    {
+        "id": "bd5569d3154382bd",
+        "type": "function",
+        "z": "82239651bf22954b",
+        "name": "Build Parameters",
+        "func": "function getDataType(value) {\n    if (Array.isArray(value)) {\n        return 'array';\n    } else if (value instanceof Date || (!isNaN(Date.parse(value)) && isNaN(value))) {\n        return 'date';\n    } else if (typeof value === 'object' && value !== null) {\n        return 'object';\n    } else {\n        return typeof value;\n    }\n}\n\nlet payload = msg.payload;\nlet timestamp = new Date().toISOString();\nlet topic = msg.topic;\nlet datatype = getDataType(payload);\nlet value;\n\n// If it's not an object or array, encapsulate it\nif (datatype !== 'object') {\n    value = { \"value\": payload };\n} else {\n    value = payload;\n}\n\n// Convert value to JSON string if it's an object or array\nif (datatype === 'object' || datatype === 'array') {\n    value = JSON.stringify(value);\n}\n\nmsg.params = [timestamp, datatype, topic, value];\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 230,
+        "y": 80,
+        "wires": [
+            [
+                "81d09bf2f25b5bd2"
+            ]
+        ]
+    },
+    {
+        "id": "ebeae7deb9eb6e0e",
+        "type": "comment",
+        "z": "82239651bf22954b",
+        "name": "Error Handler",
+        "info": "",
+        "x": 90,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "94f38e6b11bd6035",
+        "type": "debug",
+        "z": "82239651bf22954b",
+        "name": "ERROR OUTPUT",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "error",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 260,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "06b471019b7707c8",
+        "type": "catch",
+        "z": "82239651bf22954b",
+        "name": "",
+        "scope": null,
+        "uncaught": false,
+        "x": 80,
+        "y": 220,
+        "wires": [
+            [
+                "94f38e6b11bd6035"
+            ]
+        ]
+    },
+    {
+        "id": "1131d02fb44890a0",
+        "type": "comment",
+        "z": "82239651bf22954b",
+        "name": "Log all new data to the Historian",
+        "info": "",
+        "x": 150,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "8567e2b39207c24e",
+        "type": "debug",
+        "z": "82239651bf22954b",
+        "name": "Historian Insert",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "pgsql",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 560,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "81d09bf2f25b5bd2",
+        "type": "postgresql",
+        "z": "82239651bf22954b",
+        "name": "Log Data",
+        "query": "INSERT INTO metrics (server_timestamp, datatype, topic, data)\nVALUES ($1, $2, $3, $4);",
+        "postgreSQLConfig": "20ae1e52d1eef983",
+        "split": false,
+        "rowsPerMsg": "10",
+        "outputs": 1,
+        "x": 400,
+        "y": 80,
+        "wires": [
+            [
+                "8567e2b39207c24e"
+            ]
+        ]
+    },
+    {
+        "id": "33052976304f161e",
+        "type": "subflow:aa5bd3db65f96762",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Publish Recursive",
+        "env": [
+            {
+                "name": "Recursive",
+                "value": "true",
+                "type": "bool"
+            }
+        ],
+        "x": 710,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "8fdae5526b4cbe41",
+        "type": "function",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Build Payload",
+        "func": "let body = msg.payload;\n\nlet isValid = body &&\n    Object.keys(body).length >= 2 && // At least 2 keys are required\n    Object.keys(body).length <= 3 && // No more than 3 keys\n    'topic' in body && typeof body.topic === 'string' &&\n    ('recursive' in body ? typeof body.recursive === 'boolean' : true) &&\n    'data' in body;\n\nif (!isValid) {\n\n    msg.payload = \"Invalid request format or data types.\";\n    msg.statusCode = 400; // Bad Request\n\n} else {\n\n    let topic = body.topic;\n    let recursive = body.recursive;\n    let data = body.data;\n\n    msg.payload = data\n    msg.recursive = recursive\n    msg.topic = topic\n\n    msg.statusCode = 202; // Accepted\n\n}\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 280,
+        "y": 80,
+        "wires": [
+            [
+                "dfdb35afd33a884a"
+            ]
+        ]
+    },
+    {
+        "id": "3c252ca9f739dd0f",
+        "type": "comment",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Error Handler",
+        "info": "",
+        "x": 90,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "79d9407d5d2879fc",
+        "type": "debug",
+        "z": "50f4aa8cf7b0f772",
+        "name": "ERROR OUTPUT",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "error",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 260,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "f193d5a53e219398",
+        "type": "catch",
+        "z": "50f4aa8cf7b0f772",
+        "name": "",
+        "scope": null,
+        "uncaught": false,
+        "x": 80,
+        "y": 460,
+        "wires": [
+            [
+                "79d9407d5d2879fc"
+            ]
+        ]
+    },
+    {
+        "id": "48d7a5c267a200a0",
+        "type": "comment",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Publish a payload to a topic",
+        "info": "",
+        "x": 140,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "6c2993980cf5304e",
+        "type": "http in",
+        "z": "50f4aa8cf7b0f772",
+        "name": "",
+        "url": "/topic",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 90,
+        "y": 80,
+        "wires": [
+            [
+                "8fdae5526b4cbe41",
+                "c27abc4a3a4308db"
+            ]
+        ]
+    },
+    {
+        "id": "c84a37b07d6c1683",
+        "type": "subflow:aa5bd3db65f96762",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Publish",
+        "x": 680,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "dfdb35afd33a884a",
+        "type": "switch",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Is Recursive",
+        "property": "recursive",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 470,
+        "y": 80,
+        "wires": [
+            [
+                "33052976304f161e"
+            ],
+            [
+                "c84a37b07d6c1683"
+            ]
+        ]
+    },
+    {
+        "id": "c27abc4a3a4308db",
+        "type": "http response",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Response",
+        "statusCode": "",
+        "headers": {},
+        "x": 270,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "7a4f75cfefd08d63",
+        "type": "postgresql",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Get By Topic",
+        "query": "SELECT \n    server_timestamp AS timestamp,\n    datatype,\n    topic,\n    data\nFROM \n    metrics \nWHERE \n    topic LIKE $1 AND \n    datatype LIKE $2 AND \n    server_timestamp BETWEEN $3 AND $4\nORDER BY \n    server_timestamp DESC\nLIMIT $5;",
+        "postgreSQLConfig": "20ae1e52d1eef983",
+        "split": false,
+        "rowsPerMsg": "10",
+        "outputs": 1,
+        "x": 630,
+        "y": 260,
+        "wires": [
+            [
+                "7f2cedcd8abcc57b"
+            ]
+        ]
+    },
+    {
+        "id": "87476fb473c7800a",
+        "type": "http in",
+        "z": "50f4aa8cf7b0f772",
+        "name": "",
+        "url": "/topic",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 80,
+        "y": 260,
+        "wires": [
+            [
+                "7040f75b95e44036",
+                "15fcfe33e18e12c1"
+            ]
+        ]
+    },
+    {
+        "id": "d61d78fcda4a0938",
+        "type": "switch",
+        "z": "50f4aa8cf7b0f772",
+        "name": "",
+        "property": "statusCode",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "202",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 470,
+        "y": 260,
+        "wires": [
+            [
+                "7a4f75cfefd08d63"
+            ],
+            [
+                "39e8f078cee7db48"
+            ]
+        ]
+    },
+    {
+        "id": "7040f75b95e44036",
+        "type": "function",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Get Parameters",
+        "func": "let body = msg.req.body;\n\n// Function to check if a date string is valid\nfunction isValidDate(dateString) {\n    return !isNaN(Date.parse(dateString));\n}\n\nlet isValid = body &&\n    ('topic' in body ? typeof body.topic === 'string' : true) &&\n    ('datatype' in body ? typeof body.datatype === 'string' : true) &&\n    ('start' in body ? isValidDate(body.start) : true) &&\n    ('end' in body ? isValidDate(body.end) : true) &&\n    ('max' in body ? typeof body.max === 'number' : true)\n\nif (!isValid) {\n\n    msg.payload = \"Invalid request format or data types.\";\n    msg.statusCode = 400; // Bad Request\n\n} else {\n\n    let topic = body.topic;\n    let datatype = body.datatype;\n    let start = body.start;\n    let end = body.end;\n    let max = body.max;\n\n    if (topic === undefined) {\n        topic = '%'\n    }\n\n    if (datatype === undefined) {\n        datatype = '%'\n    }\n\n    if (end === undefined) {\n        end = new Date().toISOString();\n    }\n\n    if (start === undefined) {\n        let endDate = new Date(end);\n        endDate.setHours(endDate.getHours() - 1);\n        start = endDate.toISOString();\n    }\n\n    if (max === undefined) {\n        max = 10\n    }\n\n    msg.params = [topic, datatype, start, end, max];\n    msg.statusCode = 202; // Accepted\n\n}\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 260,
+        "wires": [
+            [
+                "d61d78fcda4a0938"
+            ]
+        ]
+    },
+    {
+        "id": "ae855c32d8bca99c",
+        "type": "http response",
+        "z": "50f4aa8cf7b0f772",
+        "name": "By Topic Response",
+        "statusCode": "",
+        "headers": {},
+        "x": 890,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "7f2cedcd8abcc57b",
+        "type": "function",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Set OK Status",
+        "func": "msg.statusCode = 200; // OK\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 260,
+        "wires": [
+            [
+                "ea5c89644e3584fe"
+            ]
+        ]
+    },
+    {
+        "id": "15fcfe33e18e12c1",
+        "type": "debug",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Request",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "req",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 280,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "39e8f078cee7db48",
+        "type": "link out",
+        "z": "50f4aa8cf7b0f772",
+        "name": "By Topic Bad Response",
+        "mode": "link",
+        "links": [
+            "f9a0b5be7792fed5"
+        ],
+        "x": 575,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "f9a0b5be7792fed5",
+        "type": "link in",
+        "z": "50f4aa8cf7b0f772",
+        "name": "By Topic Response",
+        "links": [
+            "ea5c89644e3584fe",
+            "39e8f078cee7db48"
+        ],
+        "x": 755,
+        "y": 320,
+        "wires": [
+            [
+                "ae855c32d8bca99c"
+            ]
+        ]
+    },
+    {
+        "id": "ea5c89644e3584fe",
+        "type": "link out",
+        "z": "50f4aa8cf7b0f772",
+        "name": "By Topic Good Response",
+        "mode": "link",
+        "links": [
+            "f9a0b5be7792fed5"
+        ],
+        "x": 935,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "61c5e21f945de2de",
+        "type": "comment",
+        "z": "50f4aa8cf7b0f772",
+        "name": "Get History by Topic",
+        "info": "",
+        "x": 110,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "005a2063df6d13bb",
+        "type": "graphql-in",
+        "z": "8440233422424740",
+        "path": "/graphql",
+        "method": "getandpost",
+        "schema": "69922c21e7b0e9a5",
+        "graphi": true,
+        "timeout": 5000,
+        "resolverstype": "rootonly",
+        "resolvers": [],
+        "usedataloader": false,
+        "useSubscriptionServer": false,
+        "subscriptionsPath": "",
+        "name": "Metrics",
+        "x": 70,
+        "y": 100,
+        "wires": [
+            [
+                "80236ee3d8c18925",
+                "9518578c4d2357b9"
+            ]
+        ]
+    },
+    {
+        "id": "9deaa9aa809c1c8c",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "GraphQL",
+        "info": "",
+        "x": 80,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "80236ee3d8c18925",
+        "type": "debug",
+        "z": "8440233422424740",
+        "name": "Raw Message",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 260,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "cc16ed8956504442",
+        "type": "graphql-out",
+        "z": "8440233422424740",
+        "name": "",
+        "output": "payload",
+        "outputType": "msg",
+        "returnformat": "nochange",
+        "return": "asis",
+        "returnarrayindx": 0,
+        "x": 560,
+        "y": 600,
+        "wires": []
+    },
+    {
+        "id": "08890d7dbe1d2221",
+        "type": "function",
+        "z": "8440233422424740",
+        "name": "Get Parameters",
+        "func": "let args = msg.graphql.args;\n\nlet topic = args.topic;\nlet datatype = args.datatype;\nlet start = args.start;\nlet end = args.end;\nlet max = args.max;\n\nif (topic === undefined) {\n    topic = '%'\n}\n\nif (datatype === undefined) {\n    datatype = '%'\n}\n\nif (max === undefined) {\n    max = 99999\n}\n\nmsg.params = [topic, datatype, start, end, max];\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 160,
+        "y": 600,
+        "wires": [
+            [
+                "22cd4b86f7ab1f7e"
+            ]
+        ]
+    },
+    {
+        "id": "22cd4b86f7ab1f7e",
+        "type": "postgresql",
+        "z": "8440233422424740",
+        "name": "Retreive Data",
+        "query": "SELECT\n    server_timestamp AS timestamp,\n    datatype,\n    topic,\n    data\nFROM \n    metrics \nWHERE \n    topic LIKE $1 AND \n    datatype LIKE $2 AND \n    server_timestamp BETWEEN $3 AND $4\nORDER BY \n    server_timestamp DESC\nLIMIT $5;",
+        "postgreSQLConfig": "20ae1e52d1eef983",
+        "split": false,
+        "rowsPerMsg": "10",
+        "outputs": 1,
+        "x": 380,
+        "y": 600,
+        "wires": [
+            [
+                "cc16ed8956504442",
+                "501ed8b20a5492aa"
+            ]
+        ]
+    },
+    {
+        "id": "501ed8b20a5492aa",
+        "type": "debug",
+        "z": "8440233422424740",
+        "name": "Returned Data",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 580,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "9518578c4d2357b9",
+        "type": "switch",
+        "z": "8440233422424740",
+        "name": "Operation Type",
+        "property": "graphql.operationType",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "query",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "mutation",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 3,
+        "x": 260,
+        "y": 100,
+        "wires": [
+            [
+                "95422e423b4ee4e0"
+            ],
+            [
+                "f8fec6ecf3242f3e"
+            ],
+            [
+                "f0bcaf4f7c8ae236"
+            ]
+        ]
+    },
+    {
+        "id": "f0bcaf4f7c8ae236",
+        "type": "link out",
+        "z": "8440233422424740",
+        "name": "Error",
+        "mode": "link",
+        "links": [
+            "d92ed1f4b54c4363"
+        ],
+        "x": 515,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "e12d2b0fb7cb52cf",
+        "type": "graphql-out",
+        "z": "8440233422424740",
+        "name": "",
+        "output": "payload",
+        "outputType": "msg",
+        "returnformat": "nochange",
+        "return": "asis",
+        "returnarrayindx": 0,
+        "x": 560,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "23438a0d87e36d35",
+        "type": "function",
+        "z": "8440233422424740",
+        "name": "Build Payload",
+        "func": "let body = msg.graphql.args;\n\nlet isValid = body &&\n    Object.keys(body).length >= 2 && // At least 2 keys are required\n    Object.keys(body).length <= 3 && // No more than 3 keys\n    'topic' in body && typeof body.topic === 'string' &&\n    ('recursive' in body ? typeof body.recursive === 'boolean' : true) &&\n    'data' in body;\n\nif (!isValid) {\n\n    msg.payload = \"Invalid request format or data types.\";\n\n} else {\n\n    let topic = body.topic;\n    let recursive = body.recursive;\n    let data = body.data;\n\n    msg.payload = data\n    msg.recursive = recursive\n    msg.topic = topic\n\n}\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 160,
+        "y": 760,
+        "wires": [
+            [
+                "0971b8803c581aab",
+                "cf15e59e6f723514",
+                "e7ed4facbc028ad3"
+            ]
+        ]
+    },
+    {
+        "id": "8435b8b56f56e20e",
+        "type": "subflow:aa5bd3db65f96762",
+        "z": "8440233422424740",
+        "name": "Publish Recursive",
+        "env": [
+            {
+                "name": "Recursive",
+                "value": "true",
+                "type": "bool"
+            }
+        ],
+        "x": 590,
+        "y": 820,
+        "wires": []
+    },
+    {
+        "id": "4114ab89faf2b633",
+        "type": "subflow:aa5bd3db65f96762",
+        "z": "8440233422424740",
+        "name": "Publish",
+        "x": 560,
+        "y": 880,
+        "wires": []
+    },
+    {
+        "id": "0971b8803c581aab",
+        "type": "switch",
+        "z": "8440233422424740",
+        "name": "Is Recursive",
+        "property": "recursive",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 370,
+        "y": 820,
+        "wires": [
+            [
+                "8435b8b56f56e20e"
+            ],
+            [
+                "4114ab89faf2b633"
+            ]
+        ]
+    },
+    {
+        "id": "cf15e59e6f723514",
+        "type": "function",
+        "z": "8440233422424740",
+        "name": "Build Object",
+        "func": "function getDataType(value) {\n    if (Array.isArray(value)) {\n        return 'array';\n    } else if (value instanceof Date || (!isNaN(Date.parse(value)) && isNaN(value))) {\n        return 'date';\n    } else if (typeof value === 'object' && value !== null) {\n        return 'object';\n    } else {\n        return typeof value;\n    }\n}\n\nlet payload = msg.payload;\nlet timestamp = new Date().toISOString();\nlet topic = msg.topic;\nlet datatype = getDataType(payload);\nlet data;\n\n// If it's not an object or array, encapsulate it\nif (datatype !== 'object') {\n    data = { \"value\": payload };\n} else {\n    data = payload;\n}\n\nmsg.payload = {timestamp, datatype, topic, data};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 760,
+        "wires": [
+            [
+                "e12d2b0fb7cb52cf",
+                "64bc9db48def9b18"
+            ]
+        ]
+    },
+    {
+        "id": "64bc9db48def9b18",
+        "type": "debug",
+        "z": "8440233422424740",
+        "name": "Returned Data",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 580,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "e7ed4facbc028ad3",
+        "type": "debug",
+        "z": "8440233422424740",
+        "name": "Data",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 350,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "f8fec6ecf3242f3e",
+        "type": "link out",
+        "z": "8440233422424740",
+        "name": "Mutation Routing",
+        "mode": "link",
+        "links": [
+            "8c65dee87e7f0ac0"
+        ],
+        "x": 515,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "95422e423b4ee4e0",
+        "type": "link out",
+        "z": "8440233422424740",
+        "name": "Query Routing",
+        "mode": "link",
+        "links": [
+            "297820c6cc5673e9"
+        ],
+        "x": 515,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "563fc53fedf3c8bf",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Query Routing",
+        "info": "",
+        "x": 620,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "a428222747fd239b",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Mutation Routing",
+        "info": "",
+        "x": 620,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "fd5782bbd1578891",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Error",
+        "info": "",
+        "x": 590,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "116147979ffe23dc",
+        "type": "link in",
+        "z": "8440233422424740",
+        "name": "Mutation Add Metric",
+        "links": [
+            "beb24b137acbc7c2"
+        ],
+        "x": 35,
+        "y": 760,
+        "wires": [
+            [
+                "23438a0d87e36d35"
+            ]
+        ]
+    },
+    {
+        "id": "61fe4f5352141a0a",
+        "type": "link in",
+        "z": "8440233422424740",
+        "name": "Query Metrics",
+        "links": [
+            "aa132c25eb2e05b1"
+        ],
+        "x": 35,
+        "y": 600,
+        "wires": [
+            [
+                "08890d7dbe1d2221"
+            ]
+        ]
+    },
+    {
+        "id": "51e00e66d20fbe4c",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Query - metrics",
+        "info": "",
+        "x": 100,
+        "y": 560,
+        "wires": []
+    },
+    {
+        "id": "9ddad0855c104a15",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Mutation - addMetric",
+        "info": "",
+        "x": 110,
+        "y": 720,
+        "wires": []
+    },
+    {
+        "id": "d92ed1f4b54c4363",
+        "type": "link in",
+        "z": "8440233422424740",
+        "name": "Error",
+        "links": [
+            "f0bcaf4f7c8ae236",
+            "812be74e547e3014",
+            "1b14cae002f1a838"
+        ],
+        "x": 35,
+        "y": 980,
+        "wires": [
+            [
+                "fac096d7b378bada"
+            ]
+        ]
+    },
+    {
+        "id": "3865a2e214250713",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Error - Unexpected Error",
+        "info": "",
+        "x": 130,
+        "y": 940,
+        "wires": []
+    },
+    {
+        "id": "fac096d7b378bada",
+        "type": "function",
+        "z": "8440233422424740",
+        "name": "Build Object",
+        "func": "\nlet args = msg.graphql.args;\n\nlet timestamp = new Date().toISOString();\nlet datatype = null\nlet topic = args.topic;\nlet data = { \"value\": \"Error\" };\n\nmsg.payload = {timestamp, datatype, topic, data};\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 150,
+        "y": 980,
+        "wires": [
+            [
+                "c16660c753f4a41b"
+            ]
+        ]
+    },
+    {
+        "id": "c16660c753f4a41b",
+        "type": "graphql-out",
+        "z": "8440233422424740",
+        "name": "",
+        "output": "payload",
+        "outputType": "msg",
+        "returnformat": "nochange",
+        "return": "asis",
+        "returnarrayindx": 0,
+        "x": 560,
+        "y": 980,
+        "wires": []
+    },
+    {
+        "id": "dfc370268f73bc36",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Error Handler",
+        "info": "",
+        "x": 90,
+        "y": 1080,
+        "wires": []
+    },
+    {
+        "id": "74d3f37e2661977c",
+        "type": "debug",
+        "z": "8440233422424740",
+        "name": "ERROR OUTPUT",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "error",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 260,
+        "y": 1120,
+        "wires": []
+    },
+    {
+        "id": "53f46a1d0784e105",
+        "type": "catch",
+        "z": "8440233422424740",
+        "name": "",
+        "scope": null,
+        "uncaught": false,
+        "x": 80,
+        "y": 1120,
+        "wires": [
+            [
+                "74d3f37e2661977c"
+            ]
+        ]
+    },
+    {
+        "id": "41f13a1e010e7e91",
+        "type": "switch",
+        "z": "8440233422424740",
+        "name": "Query Routing",
+        "property": "graphql.fieldName",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "metrics",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 260,
+        "y": 260,
+        "wires": [
+            [
+                "aa132c25eb2e05b1"
+            ],
+            [
+                "812be74e547e3014"
+            ]
+        ]
+    },
+    {
+        "id": "5041e862244b9b4a",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Query - metrics",
+        "info": "",
+        "x": 620,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "297820c6cc5673e9",
+        "type": "link in",
+        "z": "8440233422424740",
+        "name": "Query Routing",
+        "links": [
+            "95422e423b4ee4e0"
+        ],
+        "x": 35,
+        "y": 260,
+        "wires": [
+            [
+                "41f13a1e010e7e91"
+            ]
+        ]
+    },
+    {
+        "id": "aa132c25eb2e05b1",
+        "type": "link out",
+        "z": "8440233422424740",
+        "name": "Query Metrics",
+        "mode": "link",
+        "links": [
+            "61fe4f5352141a0a"
+        ],
+        "x": 515,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "239bcded397155b8",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Query Routing",
+        "info": "",
+        "x": 100,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "812be74e547e3014",
+        "type": "link out",
+        "z": "8440233422424740",
+        "name": "Error",
+        "mode": "link",
+        "links": [
+            "d92ed1f4b54c4363"
+        ],
+        "x": 515,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "c62b0ec793a447fa",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Error",
+        "info": "",
+        "x": 590,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "8c0c56ff41b784f5",
+        "type": "switch",
+        "z": "8440233422424740",
+        "name": "Query Routing",
+        "property": "graphql.fieldName",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "addMetric",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 260,
+        "y": 400,
+        "wires": [
+            [
+                "beb24b137acbc7c2"
+            ],
+            [
+                "1b14cae002f1a838"
+            ]
+        ]
+    },
+    {
+        "id": "2fce3fa5fca0d36f",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Mutation - addMetric",
+        "info": "",
+        "x": 630,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "8c65dee87e7f0ac0",
+        "type": "link in",
+        "z": "8440233422424740",
+        "name": "Mutation Routing",
+        "links": [
+            "f8fec6ecf3242f3e"
+        ],
+        "x": 35,
+        "y": 400,
+        "wires": [
+            [
+                "8c0c56ff41b784f5"
+            ]
+        ]
+    },
+    {
+        "id": "beb24b137acbc7c2",
+        "type": "link out",
+        "z": "8440233422424740",
+        "name": "Mutation Add Metric",
+        "mode": "link",
+        "links": [
+            "116147979ffe23dc"
+        ],
+        "x": 515,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "dea30c81ab48ebf7",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Mutation Routing",
+        "info": "",
+        "x": 100,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "1b14cae002f1a838",
+        "type": "link out",
+        "z": "8440233422424740",
+        "name": "Error",
+        "mode": "link",
+        "links": [
+            "d92ed1f4b54c4363"
+        ],
+        "x": 515,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "58dffc071252366e",
+        "type": "comment",
+        "z": "8440233422424740",
+        "name": "Error",
+        "info": "",
+        "x": 590,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "5d7e3e38fd1b4e25",
+        "type": "postgresql",
+        "z": "3e4a16526df2e944",
+        "name": "",
+        "query": "SELECT \n    COUNT(*) AS count,\n    AVG(time_difference) AS avg,\n    MIN(time_difference) AS min,\n    MAX(time_difference) AS max\nFROM (\n    SELECT *, AGE(database_timestamp, server_timestamp) AS time_difference\n    FROM public.metrics\n    WHERE database_timestamp > NOW() - INTERVAL '1 minute'\n) AS last_minute;\n",
+        "postgreSQLConfig": "20ae1e52d1eef983",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 150,
+        "y": 240,
+        "wires": [
+            [
+                "8f1cdc8f742d145e",
+                "f658d554f1788f6c"
+            ]
+        ]
+    },
+    {
+        "id": "8f1cdc8f742d145e",
+        "type": "debug",
+        "z": "3e4a16526df2e944",
+        "name": "Health Check - Minute",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 360,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "4aa282b84d56725c",
+        "type": "subflow:aa5bd3db65f96762",
+        "z": "3e4a16526df2e944",
+        "name": "",
+        "x": 640,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "d08a9ad137e419f7",
+        "type": "function",
+        "z": "3e4a16526df2e944",
+        "name": "Clean Results",
+        "func": "let payload = msg.payload[0]\nlet timestamp = new Date().toISOString();\n\npayload[\"published\"] = timestamp\nmsg.payload = payload\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 240,
+        "wires": [
+            [
+                "f42594c517d5e15c"
+            ]
+        ]
+    },
+    {
+        "id": "5f914ea0c4a9b783",
+        "type": "comment",
+        "z": "3e4a16526df2e944",
+        "name": "Schedule Regular Queries to Monitor Health",
+        "info": "",
+        "x": 190,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "d92cc6e4786a552d",
+        "type": "postgresql",
+        "z": "3e4a16526df2e944",
+        "name": "",
+        "query": "SELECT\n  pg_database_size(current_database()) AS db_size,\n  (SELECT COUNT(*) FROM pg_stat_activity) AS total_connections,\n  (SELECT COUNT(*) FROM pg_stat_activity WHERE state = 'active') AS active_connections,\n  (SELECT COUNT(*) FROM pg_stat_activity WHERE state = 'idle') AS idle_connections\nFROM\n  pg_database\nWHERE\n  datname = current_database();\n\n",
+        "postgreSQLConfig": "20ae1e52d1eef983",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 150,
+        "y": 300,
+        "wires": [
+            [
+                "8f1cdc8f742d145e",
+                "992470c0eea87813"
+            ]
+        ]
+    },
+    {
+        "id": "f658d554f1788f6c",
+        "type": "change",
+        "z": "3e4a16526df2e944",
+        "name": "Topic",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "Node Historian/Health/Timestamp Deviation/Minute",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 310,
+        "y": 240,
+        "wires": [
+            [
+                "d08a9ad137e419f7"
+            ]
+        ]
+    },
+    {
+        "id": "992470c0eea87813",
+        "type": "change",
+        "z": "3e4a16526df2e944",
+        "name": "Topic",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "Node Historian/Health/Load",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 310,
+        "y": 300,
+        "wires": [
+            [
+                "239ce12672b6df6c"
+            ]
+        ]
+    },
+    {
+        "id": "239ce12672b6df6c",
+        "type": "function",
+        "z": "3e4a16526df2e944",
+        "name": "Clean Results",
+        "func": "let payload = msg.payload[0]\nlet timestamp = new Date().toISOString();\n\nlet connections = {\n    \"idle\": payload[\"idle_connections\"],\n    \"active\": payload[\"active_connections\"],\n    \"total\": payload[\"total_connections\"],\n}\n\nlet load = {\n    \"database size\": payload[\"db_size\"],\n    connections,\n    \"published\": timestamp,\n}\n\nmsg.payload = load\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 300,
+        "wires": [
+            [
+                "0948f93d689c6aeb"
+            ]
+        ]
+    },
+    {
+        "id": "b984146829214290",
+        "type": "cronplus",
+        "z": "3e4a16526df2e944",
+        "name": "Schedule",
+        "outputField": "payload",
+        "timeZone": "",
+        "storeName": "file",
+        "commandResponseMsgOutput": "output1",
+        "defaultLocation": "",
+        "defaultLocationType": "default",
+        "outputs": 1,
+        "options": [
+            {
+                "name": "Minute",
+                "topic": "Minute",
+                "payloadType": "default",
+                "payload": "",
+                "expressionType": "cron",
+                "expression": "0 * * * * ? *",
+                "location": "",
+                "offset": "0",
+                "solarType": "all",
+                "solarEvents": "sunrise,sunset"
+            },
+            {
+                "name": "Hour",
+                "topic": "Hour",
+                "payloadType": "default",
+                "payload": "",
+                "expressionType": "cron",
+                "expression": "0 0 * * * ? *",
+                "location": "",
+                "offset": "0",
+                "solarType": "all",
+                "solarEvents": "sunrise,sunset"
+            },
+            {
+                "name": "Day",
+                "topic": "Day",
+                "payloadType": "default",
+                "payload": "",
+                "expressionType": "cron",
+                "expression": "0 0 0 * * ? *",
+                "location": "",
+                "offset": "0",
+                "solarType": "all",
+                "solarEvents": "sunrise,sunset"
+            }
+        ],
+        "x": 80,
+        "y": 80,
+        "wires": [
+            [
+                "6e28d9bfa7dcd055"
+            ]
+        ]
+    },
+    {
+        "id": "6e28d9bfa7dcd055",
+        "type": "switch",
+        "z": "3e4a16526df2e944",
+        "name": "",
+        "property": "payload.config.topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "Minute",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "Hour",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 330,
+        "y": 80,
+        "wires": [
+            [
+                "9bc9554ab441499f"
+            ],
+            [
+                "79713c1d8a56fe5f"
+            ]
+        ]
+    },
+    {
+        "id": "9bc9554ab441499f",
+        "type": "link out",
+        "z": "3e4a16526df2e944",
+        "name": "Minute",
+        "mode": "link",
+        "links": [
+            "1def4e27c3e4b6bd"
+        ],
+        "x": 435,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "79713c1d8a56fe5f",
+        "type": "link out",
+        "z": "3e4a16526df2e944",
+        "name": "Hour",
+        "mode": "link",
+        "links": [
+            "44bd565e46cb4d31"
+        ],
+        "x": 435,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "1def4e27c3e4b6bd",
+        "type": "link in",
+        "z": "3e4a16526df2e944",
+        "name": "Minute",
+        "links": [
+            "9bc9554ab441499f"
+        ],
+        "x": 35,
+        "y": 240,
+        "wires": [
+            [
+                "5d7e3e38fd1b4e25",
+                "d92cc6e4786a552d"
+            ]
+        ]
+    },
+    {
+        "id": "a78e17194bc6cfe8",
+        "type": "comment",
+        "z": "3e4a16526df2e944",
+        "name": "Minute",
+        "info": "",
+        "x": 70,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "b4778793e8f71232",
+        "type": "comment",
+        "z": "3e4a16526df2e944",
+        "name": "Hour",
+        "info": "",
+        "x": 70,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "44bd565e46cb4d31",
+        "type": "link in",
+        "z": "3e4a16526df2e944",
+        "name": "Minute",
+        "links": [
+            "79713c1d8a56fe5f"
+        ],
+        "x": 35,
+        "y": 440,
+        "wires": [
+            [
+                "136cbbdf77eaa24f",
+                "edd7a5198d3a51ff"
+            ]
+        ]
+    },
+    {
+        "id": "136cbbdf77eaa24f",
+        "type": "postgresql",
+        "z": "3e4a16526df2e944",
+        "name": "",
+        "query": "SELECT \n  round(sum(blks_hit)::numeric / nullif(sum(blks_hit) + sum(blks_read), 0) * 100, 2) AS cache_hit_rate,\n  sum(xact_commit) AS total_commits,\n  sum(xact_rollback) AS total_rollbacks,\n  sum(blks_read) AS blocks_read,\n  sum(blks_hit) AS blocks_hit\nFROM \n  pg_stat_database;\n",
+        "postgreSQLConfig": "20ae1e52d1eef983",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 150,
+        "y": 500,
+        "wires": [
+            [
+                "798a81e9f130a1d0",
+                "de9256af13c5cced"
+            ]
+        ]
+    },
+    {
+        "id": "798a81e9f130a1d0",
+        "type": "change",
+        "z": "3e4a16526df2e944",
+        "name": "Topic",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "Node Historian/Health/Performance",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 310,
+        "y": 500,
+        "wires": [
+            [
+                "fb4f8d53a3f8b2a8"
+            ]
+        ]
+    },
+    {
+        "id": "fb4f8d53a3f8b2a8",
+        "type": "function",
+        "z": "3e4a16526df2e944",
+        "name": "Clean Results",
+        "func": "let payload = msg.payload[0]\nlet timestamp = new Date().toISOString();\n\nlet performance = {\n    \"Cache Hit Rate\": payload[\"cache_hit_rate\"],\n    \"Commits\": payload[\"total_commits\"],\n    \"Rollbacks\": payload[\"total_rollbacks\"],\n    \"BLocks Read\": payload[\"blocks_read\"],\n    \"Blocks Hit\": payload[\"blocks_hit\"],\n    \"published\": timestamp,\n}\n\nmsg.payload = performance\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 500,
+        "wires": [
+            [
+                "fbce937e08eb3e9a"
+            ]
+        ]
+    },
+    {
+        "id": "edd7a5198d3a51ff",
+        "type": "postgresql",
+        "z": "3e4a16526df2e944",
+        "name": "",
+        "query": "SELECT \n    COUNT(*) AS count,\n    AVG(time_difference) AS avg,\n    MIN(time_difference) AS min,\n    MAX(time_difference) AS max\nFROM (\n    SELECT *, AGE(database_timestamp, server_timestamp) AS time_difference\n    FROM public.metrics\n    WHERE database_timestamp > NOW() - INTERVAL '1 hour'\n) AS last_minute;\n",
+        "postgreSQLConfig": "20ae1e52d1eef983",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 150,
+        "y": 440,
+        "wires": [
+            [
+                "42501bd6d40945be",
+                "de9256af13c5cced"
+            ]
+        ]
+    },
+    {
+        "id": "42501bd6d40945be",
+        "type": "change",
+        "z": "3e4a16526df2e944",
+        "name": "Topic",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "Node Historian/Health/Timestamp Deviation/Hour",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 310,
+        "y": 440,
+        "wires": [
+            [
+                "bb4b4b4950dd6aeb"
+            ]
+        ]
+    },
+    {
+        "id": "bb4b4b4950dd6aeb",
+        "type": "function",
+        "z": "3e4a16526df2e944",
+        "name": "Clean Results",
+        "func": "let payload = msg.payload[0]\nlet timestamp = new Date().toISOString();\n\npayload[\"published\"] = timestamp\nmsg.payload = payload\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 440,
+        "wires": [
+            [
+                "9ea80d83cbdd7a9d"
+            ]
+        ]
+    },
+    {
+        "id": "de9256af13c5cced",
+        "type": "debug",
+        "z": "3e4a16526df2e944",
+        "name": "Health Check - Hour",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 360,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "f42594c517d5e15c",
+        "type": "link out",
+        "z": "3e4a16526df2e944",
+        "name": "Publish",
+        "mode": "link",
+        "links": [
+            "3137f09ba98736e9"
+        ],
+        "x": 615,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "0948f93d689c6aeb",
+        "type": "link out",
+        "z": "3e4a16526df2e944",
+        "name": "Publish",
+        "mode": "link",
+        "links": [
+            "3137f09ba98736e9"
+        ],
+        "x": 615,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "9ea80d83cbdd7a9d",
+        "type": "link out",
+        "z": "3e4a16526df2e944",
+        "name": "Publish",
+        "mode": "link",
+        "links": [
+            "3137f09ba98736e9"
+        ],
+        "x": 615,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "fbce937e08eb3e9a",
+        "type": "link out",
+        "z": "3e4a16526df2e944",
+        "name": "Publish",
+        "mode": "link",
+        "links": [
+            "3137f09ba98736e9"
+        ],
+        "x": 615,
+        "y": 500,
+        "wires": []
+    },
+    {
+        "id": "3137f09ba98736e9",
+        "type": "link in",
+        "z": "3e4a16526df2e944",
+        "name": "Publish",
+        "links": [
+            "f42594c517d5e15c",
+            "0948f93d689c6aeb",
+            "9ea80d83cbdd7a9d",
+            "fbce937e08eb3e9a"
+        ],
+        "x": 515,
+        "y": 80,
+        "wires": [
+            [
+                "4aa282b84d56725c"
+            ]
+        ]
+    },
+    {
+        "id": "ea4d3507c2a483fe",
+        "type": "inject",
+        "z": "ace83715043d11b0",
+        "d": true,
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": ".5",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 110,
+        "y": 80,
+        "wires": [
+            [
+                "ae0bd33d13b99a83"
+            ]
+        ]
+    },
+    {
+        "id": "ae0bd33d13b99a83",
+        "type": "function",
+        "z": "ace83715043d11b0",
+        "name": "Factory",
+        "func": "// Get the loop count from the input message\nlet loopCount = 100;\n\n// Check if loopCount is a number and greater than 0\nif (typeof loopCount !== \"number\" || loopCount <= 0) {\n    node.error(\"Payload must be a positive number\");\n    return;\n}\n\n// Loop and generate messages\nfor (let i = 1; i <= loopCount; i++) {\n    // Create a new message object\n    let newMsg = { payload: \"Loop iteration \" + i };\n\n    // You can customize the topic for each message\n    newMsg.topic = \"Test/Random/\" + i;\n\n    // Send the message\n    // Note: Node-RED requires messages to be sent as an array of messages\n    node.send([newMsg]);\n}\n\n// Optionally, you can return null to indicate no more messages are sent\nreturn null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 260,
+        "y": 80,
+        "wires": [
+            [
+                "4d4b659718fb1447"
+            ]
+        ]
+    },
+    {
+        "id": "4d4b659718fb1447",
+        "type": "random",
+        "z": "ace83715043d11b0",
+        "name": "",
+        "low": 1,
+        "high": 10,
+        "inte": "false",
+        "property": "payload",
+        "x": 400,
+        "y": 80,
+        "wires": [
+            [
+                "047d2c1d4a4e0369"
+            ]
+        ]
+    },
+    {
+        "id": "047d2c1d4a4e0369",
+        "type": "subflow:aa5bd3db65f96762",
+        "z": "ace83715043d11b0",
+        "name": "",
+        "x": 560,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "72acf509347dfef8",
+        "type": "comment",
+        "z": "ace83715043d11b0",
+        "name": "Publish Random Test Numbers",
+        "info": "",
+        "x": 150,
+        "y": 40,
+        "wires": []
+    }
+]
