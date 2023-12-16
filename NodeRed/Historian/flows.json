@@ -1,0 +1,191 @@
+[
+    {
+        "id": "2175bad888ac88b8",
+        "type": "tab",
+        "label": "Listen and Log",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "5015a852569eb71b",
+        "type": "mqtt-broker",
+        "name": "Local Broker",
+        "broker": "Node-Broker",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "20ae1e52d1eef983",
+        "type": "postgreSQLConfig",
+        "name": "Local Historian",
+        "host": "Node-Historian",
+        "hostFieldType": "str",
+        "port": "5432",
+        "portFieldType": "num",
+        "database": "TIMESCALE_DATABASE_NAME",
+        "databaseFieldType": "env",
+        "ssl": "false",
+        "sslFieldType": "bool",
+        "applicationName": "Node-Red",
+        "applicationNameType": "str",
+        "max": "10",
+        "maxFieldType": "num",
+        "idle": "5000",
+        "idleFieldType": "num",
+        "connectionTimeout": "10000",
+        "connectionTimeoutFieldType": "num",
+        "user": "TIMESCALE_USERNAME",
+        "userFieldType": "env",
+        "password": "TIMESCALE_PASSWORD",
+        "passwordFieldType": "env"
+    },
+    {
+        "id": "19dceaba0cb147bf",
+        "type": "mqtt in",
+        "z": "2175bad888ac88b8",
+        "name": "",
+        "topic": "#",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "5015a852569eb71b",
+        "nl": false,
+        "rap": true,
+        "rh": "0",
+        "inputs": 0,
+        "x": 70,
+        "y": 80,
+        "wires": [
+            [
+                "bd5569d3154382bd"
+            ]
+        ]
+    },
+    {
+        "id": "bd5569d3154382bd",
+        "type": "function",
+        "z": "2175bad888ac88b8",
+        "name": "Build Parameters",
+        "func": "function getDataType(value) {\n    if (Array.isArray(value)) {\n        return 'array';\n    } else if (value instanceof Date || (!isNaN(Date.parse(value)) && isNaN(value))) {\n        return 'date';\n    } else if (typeof value === 'object' && value !== null) {\n        return 'object';\n    } else {\n        return typeof value;\n    }\n}\n\nlet payload = msg.payload;\nlet timestamp = new Date().toISOString();\nlet topic = msg.topic;\nlet datatype = getDataType(payload);\nlet value;\n\n// If it's not an object or array, encapsulate it\nif (datatype !== 'object') {\n    value = { \"value\": payload };\n} else {\n    value = payload;\n}\n\n// Convert value to JSON string if it's an object or array\nif (datatype === 'object' || datatype === 'array') {\n    value = JSON.stringify(value);\n}\n\nmsg.params = [timestamp, datatype, topic, value];\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 230,
+        "y": 80,
+        "wires": [
+            [
+                "81d09bf2f25b5bd2"
+            ]
+        ]
+    },
+    {
+        "id": "ebeae7deb9eb6e0e",
+        "type": "comment",
+        "z": "2175bad888ac88b8",
+        "name": "Error Handler",
+        "info": "",
+        "x": 90,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "94f38e6b11bd6035",
+        "type": "debug",
+        "z": "2175bad888ac88b8",
+        "name": "ERROR OUTPUT",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "error",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 260,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "06b471019b7707c8",
+        "type": "catch",
+        "z": "2175bad888ac88b8",
+        "name": "",
+        "scope": null,
+        "uncaught": false,
+        "x": 80,
+        "y": 220,
+        "wires": [
+            [
+                "94f38e6b11bd6035"
+            ]
+        ]
+    },
+    {
+        "id": "1131d02fb44890a0",
+        "type": "comment",
+        "z": "2175bad888ac88b8",
+        "name": "Log all new data to the Historian",
+        "info": "",
+        "x": 150,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "8567e2b39207c24e",
+        "type": "debug",
+        "z": "2175bad888ac88b8",
+        "name": "Historian Insert",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "pgsql",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 560,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "81d09bf2f25b5bd2",
+        "type": "postgresql",
+        "z": "2175bad888ac88b8",
+        "name": "Log Data",
+        "query": "INSERT INTO metrics (server_timestamp, datatype, topic, data)\nVALUES ($1, $2, $3, $4);",
+        "postgreSQLConfig": "20ae1e52d1eef983",
+        "split": false,
+        "rowsPerMsg": "10",
+        "outputs": 1,
+        "x": 400,
+        "y": 80,
+        "wires": [
+            [
+                "8567e2b39207c24e"
+            ]
+        ]
+    }
+]

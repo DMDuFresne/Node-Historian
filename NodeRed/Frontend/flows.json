@@ -1,0 +1,297 @@
+[
+    {
+        "id": "c0cda68d3e96f475",
+        "type": "tab",
+        "label": "Dashboard",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "1dc440ed7a2384aa",
+        "type": "ui-control",
+        "z": "c0cda68d3e96f475",
+        "name": "Example UI",
+        "ui": "f98b588f6cd4c59e",
+        "events": "all",
+        "x": 90,
+        "y": 40,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "5fa4dede23dea87a",
+        "type": "function",
+        "z": "c0cda68d3e96f475",
+        "name": "Format Payload",
+        "func": "let topic = msg.payload.topic || \"\";\nlet max = msg.payload.max || 100;\n\nlet payload = { \"query\": `\n  query {\n    metrics(\n      topic: \"%${topic}%\"\n      start: \"2023-01-01\"\n      end: \"2023-12-31\"\n      max: ${max}\n    ) {\n      timestamp\n      data\n    }\n  }\n  `\n}\n\nmsg.headers = {};\nmsg.headers={ \n    'Content-Type': 'application/x-www-form-urlencoded'\n};\n\nmsg.payload = payload;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 240,
+        "y": 100,
+        "wires": [
+            [
+                "baecbb09d32b2fce"
+            ]
+        ]
+    },
+    {
+        "id": "baecbb09d32b2fce",
+        "type": "http request",
+        "z": "c0cda68d3e96f475",
+        "name": "",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://Node-Red-Router:1880/graphql",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 430,
+        "y": 100,
+        "wires": [
+            [
+                "b65418be22feae4d"
+            ]
+        ]
+    },
+    {
+        "id": "db45d7d1c99e353c",
+        "type": "ui-chart",
+        "z": "c0cda68d3e96f475",
+        "group": "84423fbf60f7399b",
+        "name": "",
+        "label": "chart",
+        "order": 2,
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "msg",
+        "xAxisProperty": "",
+        "xAxisPropertyType": "msg",
+        "xAxisType": "time",
+        "yAxisProperty": "",
+        "ymin": "",
+        "ymax": "",
+        "showLegend": true,
+        "removeOlder": 1,
+        "removeOlderUnit": "3600",
+        "removeOlderPoints": "",
+        "colors": [
+            "#1f77b4",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "width": 6,
+        "height": 8,
+        "className": "",
+        "x": 950,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b65418be22feae4d",
+        "type": "function",
+        "z": "c0cda68d3e96f475",
+        "name": "Format for Chart",
+        "func": "// Ensure the incoming message has the expected structure\nif (!msg.payload || !msg.payload.data || !msg.payload.data.metrics) {\n    node.error(\"Invalid data structure\", msg);\n    return;\n}\n\n// Extract the metrics array\nlet metrics = msg.payload.data.metrics;\n\n// Map each item in the metrics array to a chart-compatible format\nlet chartData = metrics.map(item => {\n    return {\n        x: new Date(item.timestamp), // Convert the ISO timestamp to a JavaScript Date object\n        y: item.data.value // Use the value from the nested data object\n    };\n});\n\n// Check if at least one item in chartData has a value\nlet hasValue = chartData.some(item => item.y !== null && item.y !== undefined);\n\nif (hasValue) {\n    // Create a single message with the array of chart data\n    let chartMessage = {\n        topic: \"Data Series\", // You can keep this or adjust as per your requirement\n        payload: chartData\n    };\n\n    // Send the accumulated chart data in a single message\n    node.send(chartMessage);\n} else {\n    // Send a different response if no values are found\n    node.send({ \n        \"payload\": null,\n        \"message\": \"Returned Data is not formatted for a chart\"\n\n    });\n}\n\n// Indicate successful processing\nreturn null; // Or you can return a confirmation message if needed\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 630,
+        "y": 100,
+        "wires": [
+            [
+                "a3880346f55ae4b5"
+            ]
+        ]
+    },
+    {
+        "id": "d6e7091bbc0ade45",
+        "type": "ui-form",
+        "z": "c0cda68d3e96f475",
+        "name": "",
+        "group": "84423fbf60f7399b",
+        "label": "Search",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "options": [
+            {
+                "label": "Start Date",
+                "key": "start",
+                "type": "date",
+                "required": false,
+                "rows": null
+            },
+            {
+                "label": "Start Time",
+                "key": "startTime",
+                "type": "text",
+                "required": false,
+                "rows": null
+            },
+            {
+                "label": "End",
+                "key": "end",
+                "type": "date",
+                "required": false,
+                "rows": null
+            },
+            {
+                "label": "EndTime",
+                "key": "endTime",
+                "type": "text",
+                "required": false,
+                "rows": null
+            },
+            {
+                "label": "Topic",
+                "key": "topic",
+                "type": "text",
+                "required": false,
+                "rows": null
+            },
+            {
+                "label": "Max",
+                "key": "max",
+                "type": "number",
+                "required": false,
+                "rows": null
+            }
+        ],
+        "formValue": {
+            "start": "",
+            "startTime": "",
+            "end": "",
+            "endTime": "",
+            "topic": "",
+            "max": ""
+        },
+        "payload": "",
+        "submit": "Get History",
+        "cancel": "clear",
+        "resetOnSubmit": false,
+        "topic": "topic",
+        "topicType": "msg",
+        "splitLayout": true,
+        "className": "",
+        "x": 70,
+        "y": 100,
+        "wires": [
+            [
+                "5fa4dede23dea87a"
+            ]
+        ]
+    },
+    {
+        "id": "438ba069ef00e5ac",
+        "type": "ui-button",
+        "z": "c0cda68d3e96f475",
+        "group": "84423fbf60f7399b",
+        "name": "Reset",
+        "label": "Reset",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "passthru": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "[]",
+        "payloadType": "json",
+        "topic": "topic",
+        "topicType": "msg",
+        "x": 810,
+        "y": 140,
+        "wires": [
+            [
+                "db45d7d1c99e353c"
+            ]
+        ]
+    },
+    {
+        "id": "a3880346f55ae4b5",
+        "type": "switch",
+        "z": "c0cda68d3e96f475",
+        "name": "",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "nnull"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 810,
+        "y": 100,
+        "wires": [
+            [
+                "db45d7d1c99e353c"
+            ]
+        ]
+    },
+    {
+        "id": "f98b588f6cd4c59e",
+        "type": "ui-base",
+        "name": "Example UI",
+        "path": "/dashboard"
+    },
+    {
+        "id": "84423fbf60f7399b",
+        "type": "ui-group",
+        "name": "Example Trend",
+        "page": "d1aaca3b7d42b144",
+        "width": "6",
+        "height": "1",
+        "order": -1,
+        "showTitle": true,
+        "className": ""
+    },
+    {
+        "id": "d1aaca3b7d42b144",
+        "type": "ui-page",
+        "name": "Example Trend",
+        "ui": "f98b588f6cd4c59e",
+        "path": "/",
+        "layout": "notebook",
+        "theme": "b2faf9d078812a02",
+        "order": -1,
+        "className": ""
+    },
+    {
+        "id": "b2faf9d078812a02",
+        "type": "ui-theme",
+        "name": "Example Theme",
+        "colors": {
+            "surface": "#ffffff",
+            "primary": "#0094ce",
+            "bgPage": "#eeeeee",
+            "groupBg": "#ffffff",
+            "groupOutline": "#cccccc"
+        }
+    }
+]

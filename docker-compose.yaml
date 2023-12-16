@@ -1,15 +1,21 @@
 version: '3'
 
-services:
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "5m"
+    max-file: "2"
 
-  node-red:
-    build: ./NodeRed
-    container_name: Node-Red
+services:
+  
+  node-red-historian:
+    build: ./NodeRed/Historian
+    container_name: Node-Red-Historian
     restart: unless-stopped
     depends_on:
       - broker
     ports:
-      - 1880:1880
+      - 1890:1880
     environment:
       TZ: ${TIMEZONE}
       NODE_RED_USERNAME: ${NODE_RED_USERNAME}
@@ -18,21 +24,92 @@ services:
       TIMESCALE_USERNAME: ${TIMESCALE_USERNAME}
       TIMESCALE_PASSWORD: ${TIMESCALE_PASSWORD}
     volumes:
-      - node-red_data:/data
+      - node_red_historian_data:/data
     networks:
       - nh_network
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
+    logging: *default-logging
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:1880/"]
+      test: ["CMD", "curl", "-f", "http://localhost:1890/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-  
+
+  node-red-router:
+    build: ./NodeRed/Router
+    container_name: Node-Red-Router
+    restart: unless-stopped
+    depends_on:
+      - broker
+    ports:
+      - 1891:1880
+    environment:
+      TZ: ${TIMEZONE}
+      NODE_RED_USERNAME: ${NODE_RED_USERNAME}
+      NODE_RED_PASSWORD: ${NODE_RED_PASSWORD}
+      TIMESCALE_DATABASE_NAME: ${TIMESCALE_DATABASE_NAME}
+      TIMESCALE_USERNAME: ${TIMESCALE_USERNAME}
+      TIMESCALE_PASSWORD: ${TIMESCALE_PASSWORD}
+    volumes:
+      - node_red_router_data:/data
+    networks:
+      - nh_network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1891/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  node-red-gateway:
+    build: ./NodeRed/Gateway
+    container_name: Node-Red-Gateway
+    restart: unless-stopped
+    depends_on:
+      - broker
+    ports:
+      - 1892:1880
+    environment:
+      TZ: ${TIMEZONE}
+      NODE_RED_USERNAME: ${NODE_RED_USERNAME}
+      NODE_RED_PASSWORD: ${NODE_RED_PASSWORD}
+    volumes:
+      - node_red_gateway_data:/data
+    networks:
+      - nh_network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1892/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  node-red-frontend:
+    build: ./NodeRed/Frontend
+    container_name: Node-Red-Frontend
+    restart: unless-stopped
+    depends_on:
+      - broker
+    ports:
+      - 1893:1880
+    environment:
+      TZ: ${TIMEZONE}
+      NODE_RED_USERNAME: ${NODE_RED_USERNAME}
+      NODE_RED_PASSWORD: ${NODE_RED_PASSWORD}
+    volumes:
+      - node_red_frontend_data:/data
+    networks:
+      - nh_network
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1893/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   broker:
     image: hivemq/hivemq-edge
     container_name: Node-Broker
@@ -45,11 +122,7 @@ services:
       - broker_logs:/opt/hivemq/log
     networks:
       - nh_network
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
@@ -62,7 +135,7 @@ services:
     container_name: Node-Historian
     restart: unless-stopped
     ports:
-      - 5434:5432
+      - 5432:5432
     networks:
       - nh_network
     environment:
@@ -72,11 +145,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db-init:/docker-entrypoint-initdb.d
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${TIMESCALE_USERNAME} -d ${TIMESCALE_DATABASE_NAME}"]
       interval: 30s
@@ -90,6 +159,10 @@ networks:
 
 volumes:
   node-red_data:
+  node_red_historian_data:
+  node_red_router_data:
+  node_red_gateway_data:
+  node_red_frontend_data:
   broker_data:
   broker_logs:
   db_data:

@@ -1,0 +1,639 @@
+[
+    {
+        "id": "a6c2b0a81975e3d4",
+        "type": "tab",
+        "label": "Test Data",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "aa5bd3db65f96762",
+        "type": "subflow",
+        "name": "Publish MQTT",
+        "info": "",
+        "category": "",
+        "in": [
+            {
+                "x": 40,
+                "y": 40,
+                "wires": [
+                    {
+                        "id": "33791ae1bc7b0410"
+                    }
+                ]
+            }
+        ],
+        "out": [],
+        "env": [
+            {
+                "name": "Recursive",
+                "type": "bool",
+                "value": "false"
+            }
+        ],
+        "meta": {},
+        "color": "#DDAA99",
+        "status": {
+            "x": 120,
+            "y": 560,
+            "wires": [
+                {
+                    "id": "ea0494fc8220da5a",
+                    "port": 0
+                }
+            ]
+        }
+    },
+    {
+        "id": "5015a852569eb71b",
+        "type": "mqtt-broker",
+        "name": "Local Broker",
+        "broker": "Node-Broker",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "eaa2bedaa350fcb3",
+        "type": "mqtt out",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish",
+        "topic": "",
+        "qos": "0",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "5015a852569eb71b",
+        "x": 700,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "1687d621355052f1",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Payload Recursion",
+        "func": "function publishKeyValuePairs(obj, currentTopic) {\n    // Publish the entire object/array at the current level\n    let baseMessage = {\n        payload: obj,\n        topic: currentTopic\n    };\n    node.send(baseMessage);\n\n    // Iterate through the properties of the object\n    for (let key in obj) {\n        if (obj.hasOwnProperty(key)) {\n            let newTopic = currentTopic + \"/\" + key;\n            if (typeof obj[key] === 'object' && obj[key] !== null) {\n                if (Array.isArray(obj[key])) {\n                    // Publish the entire array before drilling down\n                    let arrayMessage = {\n                        payload: obj[key],\n                        topic: newTopic\n                    };\n                    node.send(arrayMessage);\n\n                    // Iterate through the elements of the array\n                    obj[key].forEach((item, index) => {\n                        if (typeof item === 'object' && item !== null) {\n                            // If an element of the array is an object, recurse\n                            publishKeyValuePairs(item, newTopic + \"/\" + index);\n                        } else {\n                            // If an element of the array is a primitive, send it\n                            let message = {\n                                payload: item,\n                                topic: newTopic + \"/\" + index\n                            };\n                            node.send(message);\n                        }\n                    });\n                } else {\n                    // If the value is a non-array object, recurse\n                    publishKeyValuePairs(obj[key], newTopic);\n                }\n            } else {\n                // If the value is a primitive, send it\n                let message = {\n                    payload: obj[key],\n                    topic: newTopic\n                };\n                node.send(message);\n            }\n        }\n    }\n}\n\nlet payload = msg.payload;\nlet topic = msg.topic;\n\npublishKeyValuePairs(payload, topic);\n\nmsg.topic = topic;\nmsg.payload = payload;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 360,
+        "wires": [
+            [
+                "1f37ecdb43c414f7"
+            ]
+        ]
+    },
+    {
+        "id": "5b7955854a6bd9d6",
+        "type": "switch",
+        "z": "aa5bd3db65f96762",
+        "name": "Topic is String",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "istype",
+                "v": "string",
+                "vt": "string"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 180,
+        "y": 160,
+        "wires": [
+            [
+                "4985147f23192c9c"
+            ],
+            [
+                "0e79e491fd9f15c4"
+            ]
+        ]
+    },
+    {
+        "id": "4985147f23192c9c",
+        "type": "switch",
+        "z": "aa5bd3db65f96762",
+        "name": "Topic String is Not Empty",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "nempty"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 470,
+        "y": 160,
+        "wires": [
+            [
+                "80e5383ac458dd1c"
+            ],
+            [
+                "26e5e28dc312df19"
+            ]
+        ]
+    },
+    {
+        "id": "0e79e491fd9f15c4",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Bad Topic Type",
+        "func": "let text = \"The Topic is not a String\"\n\nmsg.payload = { fill: \"red\", shape: \"dot\", text: text};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 180,
+        "y": 220,
+        "wires": [
+            [
+                "d2287cf1b6842e5b"
+            ]
+        ]
+    },
+    {
+        "id": "80e5383ac458dd1c",
+        "type": "switch",
+        "z": "aa5bd3db65f96762",
+        "name": "The Payload is Not Null",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "nnull"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 790,
+        "y": 160,
+        "wires": [
+            [
+                "fd0eb47d80bad9a5"
+            ],
+            [
+                "3e631c2c18d7ca18"
+            ]
+        ]
+    },
+    {
+        "id": "26e5e28dc312df19",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Bad Topic Type",
+        "func": "let text = \"The Topic String is Empty\"\n\nmsg.payload = { fill: \"red\", shape: \"dot\", text: text};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 440,
+        "y": 220,
+        "wires": [
+            [
+                "5828376d7e275f52"
+            ]
+        ]
+    },
+    {
+        "id": "12cb4635b44a9ec0",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Cleanse",
+        "func": "function removeEmptyFields(obj) {\n    if (Array.isArray(obj)) {\n        return obj\n            .map(v => (v && typeof v === 'object') ? removeEmptyFields(v) : v)\n            .filter(v => v !== '' && v != null && !(typeof v === 'object' && Object.keys(v).length === 0));\n    } else if (typeof obj === 'object') {\n        return Object.entries(obj)\n            .reduce((acc, [key, value]) => {\n                if (value === '' || value == null || (typeof value === 'object' && Object.keys(value).length === 0)) {\n                    return acc;\n                }\n                if (typeof value === 'object') {\n                    value = removeEmptyFields(value);\n                }\n                acc[key] = value;\n                return acc;\n            }, {});\n    }\n    return obj;\n}\n\nlet payload = msg.payload;\npayload = removeEmptyFields(payload);\n\nmsg.payload = payload;\n\nreturn msg",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 360,
+        "wires": [
+            [
+                "1687d621355052f1"
+            ]
+        ]
+    },
+    {
+        "id": "d2287cf1b6842e5b",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Status 1",
+        "mode": "link",
+        "links": [
+            "ea0494fc8220da5a"
+        ],
+        "x": 295,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "5828376d7e275f52",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Status 2",
+        "mode": "link",
+        "links": [
+            "ea0494fc8220da5a"
+        ],
+        "x": 555,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "ea0494fc8220da5a",
+        "type": "link in",
+        "z": "aa5bd3db65f96762",
+        "name": "Status In",
+        "links": [
+            "5828376d7e275f52",
+            "d2287cf1b6842e5b",
+            "eb85013d8a0321b9",
+            "2a819fca8c57ead2",
+            "7dffca6028e350fe"
+        ],
+        "x": 35,
+        "y": 560,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "3e631c2c18d7ca18",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Null Payload",
+        "func": "let text = \"The Payload is Null\"\n\nmsg.payload = { fill: \"red\", shape: \"dot\", text: text};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 750,
+        "y": 220,
+        "wires": [
+            [
+                "eb85013d8a0321b9"
+            ]
+        ]
+    },
+    {
+        "id": "eb85013d8a0321b9",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Status 3",
+        "mode": "link",
+        "links": [
+            "ea0494fc8220da5a"
+        ],
+        "x": 875,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "1539d826be6da19c",
+        "type": "link in",
+        "z": "aa5bd3db65f96762",
+        "name": "Validate Topic",
+        "links": [
+            "33791ae1bc7b0410"
+        ],
+        "x": 35,
+        "y": 160,
+        "wires": [
+            [
+                "5b7955854a6bd9d6"
+            ]
+        ]
+    },
+    {
+        "id": "33791ae1bc7b0410",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Validate Topic",
+        "mode": "link",
+        "links": [
+            "1539d826be6da19c"
+        ],
+        "x": 115,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "7c5ad3fd8429108e",
+        "type": "function",
+        "z": "aa5bd3db65f96762",
+        "name": "Valid Topic and Payload",
+        "func": "let text = msg.topic\n\nmsg.payload = { fill: \"green\", shape: \"dot\", text: text};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 480,
+        "wires": [
+            [
+                "7dffca6028e350fe"
+            ]
+        ]
+    },
+    {
+        "id": "7dffca6028e350fe",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Status 5",
+        "mode": "link",
+        "links": [
+            "ea0494fc8220da5a"
+        ],
+        "x": 745,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "ad8c6c5c7a19f670",
+        "type": "switch",
+        "z": "aa5bd3db65f96762",
+        "name": "Recursive Payload",
+        "property": "Recursive",
+        "propertyType": "env",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 190,
+        "y": 360,
+        "wires": [
+            [
+                "12cb4635b44a9ec0"
+            ],
+            [
+                "1b0aca21733824ee"
+            ]
+        ]
+    },
+    {
+        "id": "fd0eb47d80bad9a5",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish Topic",
+        "mode": "link",
+        "links": [
+            "f4048319e6fbfa9c"
+        ],
+        "x": 975,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "f4048319e6fbfa9c",
+        "type": "link in",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish Topic",
+        "links": [
+            "fd0eb47d80bad9a5"
+        ],
+        "x": 35,
+        "y": 360,
+        "wires": [
+            [
+                "ad8c6c5c7a19f670"
+            ]
+        ]
+    },
+    {
+        "id": "7292c6361f063b6f",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Validate Topic",
+        "info": "",
+        "x": 90,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "7f2295edbda6e8ef",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Validate Topic",
+        "info": "",
+        "x": 210,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "a869731b418441ec",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish Topic",
+        "info": "",
+        "x": 1070,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "01c9884e7750cdb5",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish Topic",
+        "info": "",
+        "x": 90,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "7f92b6a598dba318",
+        "type": "comment",
+        "z": "aa5bd3db65f96762",
+        "name": "Return Status",
+        "info": "",
+        "x": 90,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "1b0aca21733824ee",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish",
+        "mode": "link",
+        "links": [
+            "a52d84ae6e1adf23"
+        ],
+        "x": 375,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "a52d84ae6e1adf23",
+        "type": "link in",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish",
+        "links": [
+            "1b0aca21733824ee",
+            "1f37ecdb43c414f7"
+        ],
+        "x": 535,
+        "y": 420,
+        "wires": [
+            [
+                "eaa2bedaa350fcb3",
+                "7c5ad3fd8429108e"
+            ]
+        ]
+    },
+    {
+        "id": "1f37ecdb43c414f7",
+        "type": "link out",
+        "z": "aa5bd3db65f96762",
+        "name": "Publish",
+        "mode": "link",
+        "links": [
+            "a52d84ae6e1adf23"
+        ],
+        "x": 745,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "ea4d3507c2a483fe",
+        "type": "inject",
+        "z": "a6c2b0a81975e3d4",
+        "d": true,
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": ".5",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 110,
+        "y": 80,
+        "wires": [
+            [
+                "ae0bd33d13b99a83"
+            ]
+        ]
+    },
+    {
+        "id": "ae0bd33d13b99a83",
+        "type": "function",
+        "z": "a6c2b0a81975e3d4",
+        "name": "Factory",
+        "func": "// Get the loop count from the input message\nlet loopCount = 100;\n\n// Check if loopCount is a number and greater than 0\nif (typeof loopCount !== \"number\" || loopCount <= 0) {\n    node.error(\"Payload must be a positive number\");\n    return;\n}\n\n// Loop and generate messages\nfor (let i = 1; i <= loopCount; i++) {\n    // Create a new message object\n    let newMsg = { payload: \"Loop iteration \" + i };\n\n    // You can customize the topic for each message\n    newMsg.topic = \"Test/Random/\" + i;\n\n    // Send the message\n    // Note: Node-RED requires messages to be sent as an array of messages\n    node.send([newMsg]);\n}\n\n// Optionally, you can return null to indicate no more messages are sent\nreturn null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 260,
+        "y": 80,
+        "wires": [
+            [
+                "4d4b659718fb1447"
+            ]
+        ]
+    },
+    {
+        "id": "4d4b659718fb1447",
+        "type": "random",
+        "z": "a6c2b0a81975e3d4",
+        "name": "",
+        "low": 1,
+        "high": 10,
+        "inte": "false",
+        "property": "payload",
+        "x": 400,
+        "y": 80,
+        "wires": [
+            [
+                "047d2c1d4a4e0369"
+            ]
+        ]
+    },
+    {
+        "id": "047d2c1d4a4e0369",
+        "type": "subflow:aa5bd3db65f96762",
+        "z": "a6c2b0a81975e3d4",
+        "name": "",
+        "x": 560,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "72acf509347dfef8",
+        "type": "comment",
+        "z": "a6c2b0a81975e3d4",
+        "name": "Publish Random Test Numbers",
+        "info": "",
+        "x": 150,
+        "y": 40,
+        "wires": []
+    }
+]
